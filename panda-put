@@ -1,0 +1,38 @@
+#!/bin/bash
+# Panda Putter
+# Upload videos to panda stream via cURL and BASH!
+# Lovingly created by Matthew Savage for use at Swellnet (http://www.swellnet.com.au)
+
+# Depends on cURL, OpenSSL and Perl URI CPAN module (cpan install URI)
+
+# Configuration - change the following values to your details
+  # The ID of the encoding cloud you will use
+  CLOUD_ID="cloudid"
+
+  # From your account section
+  ACCESS_KEY="accesskey"
+  SECRET_KEY="secretkey"
+
+  # Only change this if you require the EU API
+  API_URL="api.pandastream.com"
+# You should not need to change anything below this
+
+if [ ! -e "$1" ]; then
+  echo "Panda Putter - publish videos to PandaStream from bash using cURL"
+  echo "  Usage: panda-put file.ext (example panda-put panda.mp4)"
+  exit 1
+fi
+
+URI="http://$API_URL/v2/videos.json"
+TIMESTAMP=`date -u +"%Y%m%dT%H:%M:%S.%sZ"`
+ESCAPED_TIMESTAMP=$(perl -MURI::Escape -e 'print uri_escape($ARGV[0]);' "$TIMESTAMP")
+
+REQUEST_STRING="POST\n$API_URL\n/videos.json\naccess_key=$ACCESS_KEY&cloud_id=$CLOUD_ID&timestamp=$ESCAPED_TIMESTAMP"
+REQUEST_HMAC=`echo -en $REQUEST_STRING|openssl dgst -sha256 -hmac $SECRET_KEY -binary|openssl enc -base64`
+
+REQUEST_URI="$URI?access_key=$ACCESS_KEY&cloud_id=$CLOUD_ID&timestamp=$ESCAPED_TIMESTAMP&signature=$(perl -MURI::Escape -e 'print uri_escape($ARGV[0]);' "$REQUEST_HMAC")"
+
+# Upload and get the ID - yes, the command to pull the ID from the JSON is hacky, but it works...
+RESPONSE=`curl -F "file=@$1" "$REQUEST_URI"`
+
+echo $RESPONSE|grep -Po '"id":.*?[^\\]"'|sed -e s/\"id\"://|sed -e s/\"//g
